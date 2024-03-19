@@ -1,0 +1,1186 @@
+
+
+           LAN MANAGER SPECIFICATION UPDATE SUMMARY, 2/23/88
+
+The following lists the more significant changes to LAN Manager
+features, user interface, and APIs since the 10/14/87 spec.
+
+1. Drive and directory-level permissions are not longer mutually exclusive.
+   It is possible to set drive-level permissions for a drive that also
+   has directory- and file-level permission entries in the access control
+   list.  The rules for permissions are:
+
+   a. First see if resource being opened has a specific entry in the
+      access control list.  If so, use that entry's permissions for
+      the access check.
+
+   b. If no specific entry exists for the resource, check if there
+      is a parent entry and use its permissions if so.  For a file
+      or directory resource, the parent entry is the containing (parent)
+      directory.  For a pipe, print queue, or comm device resource,
+      the parent entry is \PIPE, \PRINT, or \COMM respectively
+
+   c. If no specific or parent entry exists for the resource, and the
+      resource is a file or directory, check if drive-level permissions
+      are defined.  If so, use the drive-level permissions for the access
+      check.
+
+   NOTE:  When a directory is created, the server tries ti automatically add
+          an access entry for the newly created directory.  To do this,
+          it checks if the parent directory has an access entry, and if
+          so, the server adds an access entry for the new child that contains
+          the same permissions as the parent's entry.  If there is no access
+          entry for the parent, no entry is added for the child.
+
+2. NET START SERVER:  the /security switch is abbreviated as /sec, not
+   as /se.
+
+3. NET LOAD:  Clarification to spec:  When Net Load (or the NIF equivalent)
+   is loading a profile that contains Net Share commands, the command
+   will only prompt for confirmation about deleting existing shares if
+   one or more of the existing shares have connections (uses) to them.
+   If none of the shares have outstanding connections, Net Load issues
+   no warning about deleting the existing shares.
+
+4. P. 105 correction:  A permission of Y for a pipe is equivalent to
+   RW permission (not RWC as stated in the spec).  Y is just a synonym
+   in the user interface for RW, when dealing with a pipe.
+
+5. Sec 3.1.1 and 3.2.1:  The DEVICE= statement for NETBIOS.SYS should
+   reference the DRIVERS subdirectory, not NETPROG.
+
+6. NET PRINT and NIF Print Queues:  add a print queue status, "Queue has been
+   deleted".  Indicates that the print queue has been marked for deletion
+   (ie, by Net Print Netname /D).  This means the queue will refuse
+   accepting new jobs and will delete itself when the last remaining
+   job finishes.
+
+   Also note:  The status for a quueued job should say Waiting.  The
+   spec shows the status column as blank for such jobs.
+
+7. NET PRINT [\\SERVER | LPTn] Job#:  The detail display of job info will
+   show an expanded listing of job details, not the one-line summary shown
+   in the spec.  The format of this is:
+
+   Job id:
+   Status:
+   Size:
+   Remark:
+   Submitting user:
+   Send notifications to:
+   Job data type:
+   Job parameters:
+
+   Status is one of:
+        Waiting in <queue name>, <position-1> jobs ahead
+        Held in <queue name>
+        Printing on <device name>
+        Paused on <device name>
+        Out of paper on <device name>
+        Error on <device name>
+
+8. (item deleted)
+
+9. User logon handling by server in user security mode:  New rules are:
+
+   a. If user is coming from an old DOS 3 workstation (not using lanman
+      dos 3 redir), then treat the computername as the username, and take
+      logon password from the first net use.  If user is coming from an os/2 or
+      dos 3 workstation using the lanman redirector, then username and
+      password are explicit.  (The preceding statement isn't a change
+      from previous spec, I'm just stating it for completeness).
+
+   b. Check if the (explicit or implicit) username is defined in the user
+      list.  If so, attempt logon via the username and supplied password.
+
+   c. If the username is NOT defined in the user list--ie, no such user
+      account--then check if a guest account exists (ie, guestacct= has
+      a non-null value).  If not, reject the logon.  Otherwise, take
+      the guestacct= name as the username, and try the logon using
+      that username and the password supplied by the user.
+
+10. session_info_1 structure for NetSession api's:
+
+    A dword flags arg has been added to the api.
+    Bit 0 set => user logged on via the guest account (guestacct= in .ini)
+    Bit 1 set => user session is using cryptography
+
+11. file_info_1 api structure clarification:  The "permissions" field
+    for a file entry indicates what access mode the file was opened
+    for.  Ie, the bits will encode some combination of RWC.
+
+12. NET FILE <ID#> and NIF Status Opened Files:
+
+    The Net File <ID#> info listing should include as its last item:
+
+    Opened for:
+
+    Where the value will be some combination of RWC.
+
+    In NIF, the listbox should have a field called Opened For instead
+    of Permissions.
+
+13. Central logon feature:  See central logon codespec for the full
+    definition of this feature.  The following summarizes the extrenal
+    effects on major components:
+
+    a.  LANMAN.INI:  add new [logon] section, and new entry to [services]
+
+        [logon]
+        centralized = no
+
+        [services]
+        logon = netprog\netlogon.exe
+
+    b.  Net Start Logon and Net Stop Logon are supported.  Optional
+        /C(entralized): switch on Net Start Logon.
+
+        Note:  The logon service will automatically create a share
+        called USERS that points to the userpath.  This share is
+        NOT removed when the logon service is stopped.
+
+        Net Pause Logon and Net Continue Logon are also supported.  Pausing
+        the logon service allows it to stop responding to workstation logon
+        requests while also continuing to enforce logon server uniqueness
+        rules.
+
+    c.  In NIF, [ ] Logon Service checkbox added to Config Server Options
+
+    d.  In NIF, add to User Add/Zoom screen under Accounts Users/Groups:
+
+        Logon script name [............]      [ ] Enable script
+
+        Note:  The checkbox enables/disables logon handling for this
+               user.  Typing a value for the scriptname specifies
+               a logon script to use if the box is checked.  These
+               fields are independent, ie, can check the box but have
+               no logon script.  If the box is not checked, the logon
+               script name is stored in the user account definition,
+               but it is not used at logon time.
+
+    e.  NetWkstaInit() and NetWkstaReInit api added to NETOEM.DLL.
+
+        New error codes for NetWkstaSetUID:
+           NERR_CentralLogonFailed
+               Username/password did not validate, SetUID failed
+           NERR_NoLogonServer
+               Cannot find required logon server
+           NERR_LogonScriptError
+               Warning only:  SetUID succeeded, but error occurred processing
+               logon script, logon occurred with no or partial script
+
+         NOTE:  NERR_StandaloneLogon has been removed.
+
+        Occurrence of these errors is detected by NET LOGON and NIF
+        and reflected to the user in warning/error messages at logon time.
+
+    f.  LANMAN directory updated as follows:
+
+        USERDIRS          <DIR>        Userpath ini parm points to here
+          SCRIPTS         <DIR>        Default place for logon scripts
+          NETLOGON.CMD               Default logon script
+          xxxxxxx         <DIR>        User directories
+        NETPROG           <DIR>      Net executables
+          NETLOGON.EXE                 Central logon processor
+
+        NOTE:  The distribution diskettes and installer should set
+               up USERDIRS and its contents.  Ie, this stuff should
+               be added to our lamman tree.
+
+    g. Logon script rules:
+
+       - Logon script can be a .PRO or .CMD (batch file).  If a .PRO,
+         it is loaded like any other profile at logon time.  If a .CMD
+         it is executed via CMD.EXE with command line args as follows:
+
+         <cmd file name> <username> <logon servername> <netname> <homedir>
+         batch arg:          %1             %2            %3        %4
+
+         Where username is the name of the user being logged on,
+               cmd file name is the unc name of the batch file
+               logon servername is the \\name of the logon server
+               netname is USERS if the user's homedir is relative to userpath,
+                       else ??? indicating the net name of homedir is unknown
+               homedir is a relative pathname if the dir is relative to USERS
+                       else an absolute pathnane if netname was ???
+                       or ??? if there is no homedir for this user
+
+         Examples of command line to execute the script:
+
+         \\FOO\USERS\SCRIPTS\FRED.CMD FRED \\FOO USERS FREDDIR
+
+         \\FOO\USERS\SCRIPTS\FRED.CMD FRED \\FOO ??? D:\ETC\FREDDIR
+
+    h. The default logon profile, NETLOGON.CMD (see lanman dir above) contains:
+
+       ECHO Your home server is %2
+       IF %3 == ??? GOTO EXIT
+       IF %4 == ??? GOTO EXIT
+       ECHO Drive H: will refer to your home directory on %2
+       NET USE H: %2\%3
+       CD H: %4
+       -EXIT
+
+    i. Added to LANMAN.INI:  [workstation] logonserver= parameter.
+       Values allowed are:
+
+       \\*              Dynamically find the logon server for this use
+       \\servername     Use specific logon server
+       (null)           Don't do logon server processing:  ie, standalone logon
+
+       Default value is \\* if logonserver= is not specified.
+
+    j. The way standalone logon works has changed.  If logonserver= specifies
+       \\* or a servername (or if it is allowed to default to \\*), then
+       failure to find a logon server causes logon to FAIL.  Ie, standalone
+       logon no longer occurs in this case.  The standalone logon option
+       must be configured by specifying a null value for logonserver=.
+       This causes logon server processing to be skipped altogether.
+
+14. user_info_1 struct:  added a dword user_flags argument to the struct.
+                           Bit 0 set => user account is disabled
+                           Bit 1 set => do central logon for this user
+                         also added a scriptname char far * to the struct
+                           (indicates name of user logon script)
+
+    NOTE:  The user privilege level of 3 (none) has been deleted from the
+           spec.  Setting bit 0 of user_flags now provides the way to
+           disable a user account.
+
+15. NetFileEnum api:  added a new calling argument, qualifier, that
+    specifies a leading path string to use as a prefix match on the
+    enum.  Ie, if qualifier is C:\FOO, then only file entries whose
+    path begin with that string will be returned.
+
+16. NetAuditClear and NetErrorClear api's:  added a backupfile parameter
+    that specifies the name of a file to save the current log to before
+    doing the clear operation.
+
+17. The NIF Accounts File Permissions Zoom screen has been modified.
+    The same is true of Accounts Other Permissions Add and Zoom.
+    The screens now have two radio buttons as follows:
+
+    () Use default permissions
+    () Set explicit permissions
+
+    When the screen appears, if no access entry exists for the resource,
+    its default permissions are displayed and the first button is shown
+    as "pressed".  If a specific access entry exists for the resource,
+    those permissions are shown and the second button shows as "pressed".
+
+    The user can manually press these buttons.  Pressing "use default"
+    will fetch the default permissions for the resource and display them.
+    (Default permissions come from the parent or drive-level access entries).
+    Pressing "set explicit" will get the access entry for the resource (if
+    any) and display those permissions (if no explicit permissions, the
+    "Permitted" box will be blank).
+
+    If the user edits the display when default permissions are being displayed,
+    the button indicator will move to the "set explicit" position.  This
+    lets a user start with default permissions and modify them.
+
+    OK'ing the dialog box acts depending on the button setting:
+
+    a. If "use default" is indicated, any existing access entry for this
+       resource is deleted.
+
+    b. If "set explicit" is indicated, the displayed permissions are saved
+       as an access entry for the resource; if the displayed permissions
+       are blank (ie, no permissions defined), any existing access entry
+       for the resource is deleted.
+
+    An additional new checkbox has been added to the File Permissions Add/Zoom
+    screen:
+
+    [ ] Copy permissions to descendants
+
+    If checked when the screen is OK'd, the equivalent of a Permit Tree
+    operation is done--ie, the set permissions are copied to all descendant
+    directories.
+
+18. Service api:  added SERVICE_UIC_SYSTEM category code to install/uninstall
+    error categories.  Modifier for this is the return code from the net or
+    os/2 api that caused the error.
+
+19. LANMAN.INI paramters to be added but probably haven't been yet:
+
+    [workstation]
+      wrkheuristics=string         ;an option string that controls redirector
+                                   ;heuristics.  Probably a string like YYNNYN
+      logonserver=[servername|\\*] ;name of logon server for user, or \\* (the
+                                   ;default) if should be found dynamically
+                                   ;NOTE:  a null value for logonserver= is
+                                   ;also allowed.  See 13 i and j above.
+    [server]
+      srvheuristics=string         ;like wrkoptions, to control server
+                                   ;heuristics
+
+20.  New api NetAccessCheck, defined as follows:
+     unsigned short far pascal
+     NetAccessCheck(reserved,username,resource,operation,result)
+     char far * reserved;         /* reserved, MBZ */
+     char far * username;         /* asciiz user name */
+     char far * resource;         /* asciiz resource name */
+     unsigned short operation;    /* operation bit mask:  */
+                                  /* ACCESS_READ    0x1   */
+                                  /* ACCESS_WRITE   0x2   */
+                                  /* ACCESS_CREATE  0x4   */
+                                  /* ACCESS_EXEC    0x8   */
+                                  /* ACCESS_DELETE  0x10  */
+                                  /* ACCESS_ATRIB   0x20  */
+                                  /* ACCESS_PERM    0x40  */
+                                  /* Other bits are reserved, MBZ */
+     unsigned short result;       /* Result of access check (returned) */
+                                  /* 0 (permitted) or OS/2 error_access_denied
+
+    NOTE:  The above definition has been corrected to indicate that
+           NetAccessCheck takes a username only, not a user or group name.
+
+    NOTE:  NetAccessCheck validates access in a way analagous to what would
+           happen if the purported user name tried to log in.  In other words,
+           group membership and guest account login rules apply and may
+           participate in granting access.
+
+21. NetBios api:  defined new bit in nb_net_status mask in netbios_info
+    struct.  The new bit, bit 1, is now defined to mean "loopback driver"
+    if the bit is set.  This indicates that the driver does not really
+    go to a net, it is just for looping back sessions within the machine.
+    Lanman utilities like the browser, messenger, etc will operate on
+    the first managed net that is NOT a loopback net, if multiple
+    nets are installed.  These utilities will operate on the first
+    managed loopback net only if there are no managed nets that are
+    nonloopback.
+
+22. NetProfileLoad api behavior changed.  IPC$ and ADMIN$ shares are
+    not deleted by loading a profile.  Instead, the share record
+    in the loaded profile is used to do a NetShareSetInfo on those
+    shares.  This prevents IPC and admin connections from getting
+    dropped by loading a profile.
+
+23. NET ACCESS new command syntax:
+
+NET ACCESS [/ADD | /DELETE | /GRANT | /REVOKE | /CHANGE] resource rights
+           [/TRAIL]
+
+        /ADD to add a resource to the access control system
+        /DELETE to delete a resource from the access control system
+        /GRANT to give new users/groups rights to a resource
+        /REVOKE to revoke users' or groups' rights to a resource
+        /CHANGE to edit users' or groups' rights to a resource
+        /TRAIL can be used with any switch except /DELETE
+
+24. Fullscreen interface behavior in several areas:
+
+    a. When sharing a directory, if the directory does not exist, you are
+       asked it is ok to create it.
+
+    b. When specifying a home directory for a user, if the directory does
+       not exist you are asked if it is ok to create it.
+
+    c. The home directory field defaults to all blank when adding a user.
+       The scriptname field defaults to NETLOGON.CMD.
+
+25. API's and pathname arguments:  Several api's take pathname parameters.
+    Examples are NetUser api's, which take homedir and scriptname,
+    and NetProfile, which take profilenames.  The rules for such names
+    are that they can be:
+
+    a. Relative pathname.  Ie, do not start with a drive letter or \ and
+       contain no . or .. anywhere in the path.  Such a name is always
+       taken by the api to be relative to a specific place determined
+       by lanman.  Eg, profiles are relative to PROFILES, homedirs
+       are relative to the path specified by USERPATH= in lanman.ini,
+       scriptnames are relative to the SCRIPTS dir under the USERPATH,
+       etc.
+
+    b. Absolute pathname.  Ie, fully qualified including drive letter.
+
+26. Adding new API:
+
+    unsigned far pascal
+    NetSpecialSmb(uncname,opcode,reqbuf,reqlen,rspbuf,rsplen)
+    {
+      char far * uncname;     /* unc name of destination for special smb */
+      unsigned short opcode;  /* 0 => do smb exchange, 1 => drop session */
+      char far * reqbuf;      /* ptr to smb to send */
+      unsigned short reqlen;  /* length of smb request buffer */
+      char far * rspbuf;      /* ptr to buffer for response smb */
+      unsigned short rsplen;  /* length of response buffer */
+    }
+
+    This call provides a way to support existing OEM SMB extensions on an
+    OS/2 workstation when the workstation is talking to a core-level OEM
+    server that implements those SMBs.  The call operates as follows:
+
+    a. Locate the session and connection implied by the uncname argument.
+       If either the session or connection don't exist, they are established
+       automatically.  If the target session is NOT a core session, the
+       request is errored.  Otherwise proceed.
+
+    b. If opcode is 1, hang up the session.  If 0, validate that the
+       reqlen and rsplen are within the negotiated buffer size for the
+       session (or the redirector's buffer size, if this is less).
+       Error the request if not, else proceed.
+
+    c. Send the request SMB (reqbuf), with the appropriate PID and TID
+       automatically filled in by the redirector.  Receive the response
+       into rspbuf.
+
+    Note that this call is synchronous and exchanges exactly one smb
+    in each direction.
+
+27. Passwords are now 14 chars long.
+
+28. Netbios API:  checks are being added to the redirector to prevent
+    applications from issuing NCBs against redirector sessions.  Without
+    these checks, it has been possible for applications to put messages
+    onto redirector sessions.  This new logic will cause SABORT.EXE
+    to stop working, but the NetSpecialSMB function provides another
+    way to implement SABORT.
+
+29. Adding new type of audit trail record to indicate when a resource
+    that is being audited has been closed.  With this change, certain
+    occurrences of an Access record will have a matching Access Ended record
+    (ie, those that imply a DosOpen was performed on a resource).
+    NIF Status Audit Trail and Netcmd Net Audit will display the new
+    Access Ended record as follows when it is found in the audit trail:
+
+    User Name                   Type            Date/Time
+    __________________________________________________________________
+    FRED                        Access Ended    12/29/87 at 15:33:35
+      Closed C:\FOO\BAR.TXT, Duration 2:00:12
+    FRED                        Access Ended    12/29/87 at 15:33:35
+      Closed C:\FOO\BAR.TXT (disconnected), Duration 2:33:10
+    FRED                        Access Ended    12/29/87 at 15:33:35
+      Admin closed C:\FOO\BAR.TXT, Duration 3:10:33
+    FRED                        Access Ended    12/29/87 at 15:33:35
+      Closed \PRINT\LASER, Duration 10:33
+    FRED                        Access Ended    12/29/87 at 15:33:35
+      Closed \COMM\MODEM (COM2), Duration 10:33
+
+    The above shows the three cases of a normal close, close due to
+    session disconnect, and close due to admin command (eg, Net File /C
+    or Net Share /D).  Next are entries showing close of a print job
+    (ie, close of the spool file) and close of a comm device (note the
+    device name is shown after the resource name).
+
+    This feature requires a change to the existing access record format
+    as well:
+
+    Add to Type 7 audit records immediately after the operation
+    performed variable:
+
+    short  unique access ID (ie, FID).  0 for operations (like delete)
+           that generate no FID.  The uniquea access ID lets this
+           record be correlated with the matching access end record
+           (see below).
+
+    short  result code.  This is the return code from performing the
+           operation.  Ie, the return code from DosOpen, DosDelete,
+           NetPrintJobAdd, etc.
+
+    Note that a type 7 record is generated whether or not the attempted
+    operation succeeds.  If the result code indicates success and the
+    access ID is nonzero, a matching type 9 record will be generated
+    when the resource is closed.
+
+    Add a new access record type--
+    Type 9:  Resource access end record
+
+             offset computername of client
+             offset username of client (NULL if same as computername)
+             offset resource name
+             short  unique access ID (FID)
+             long   duration of access (eg, how long file was open)
+             short  reason for ending access, one of:
+                        0 - Normal client close
+                        1 - Session disconnected
+                        2 - Close was forced by administrator command
+
+30. other_info structs in NetAlert api's:  several of the other_info
+    structs have string content that is currently being passed in
+    fixed width fields.  All other_info structs are to be modified
+    to put all string variables at the end of the struct (after
+    shorts etc), and to pack those strings variable length.  This
+    also means that things like computernames will have trailing
+    blanks removed, so that we truly pack the values.
+
+31. The NetShare api's have been modified to give significance to
+    the P permission bit in the share_info permissions mask.  In this
+    context, the P bit is taken to mean that the share is "admin"
+    protected.  This means that a user must have admin privilege
+    in order to use to that share.  The NetShareAdd api will coerce
+    any share of ADMIN$ to have the P bit set (it already has special
+    case code for ADMIN$, so this shouldn't be a big deal).
+
+    NOTE:  The NetShareAdd api will coerce any share of ADMIN$ to have the P
+    bit set (it already has special case code for ADMIN$, so this shouldn't be
+    a big deal).  NetShareAdd and NetShareSetInfo will now treat the permission
+    mask as settable, even in user-level security mode (although in user-level
+    security, only the P bit has significance).
+
+32. The DosWriteMailslot api is extended to take a new timeout parameter.
+    The write will be failed if it cannot be completed within the
+    specified timeout.  This is not a guarantee that the call will
+    return exactly within the timeout (ie, it could take a little longer
+    to time out depending on network delays etc.).
+
+33. The NetAlertRaise api is modified to take a timeout parameter.
+    This timeout is the timeout that will be used when alerting
+    mailslot recipients.  Ie, it becomes the timeout the api uses on its
+    DosWriteMailslot.
+
+34. (Item replaced, see item 79).
+
+35. The ability to pause comm devices has been removed from this release.
+    This affects the following things:
+
+    a. Net Pause Comm=netname and Net Continue Comm=Netname are removed.
+
+    b. In NIF, the Pause/Continue buttons on the Status Shared Devices
+       screen will be blued-out when selecting a non-spooled device.
+
+    c. The pause/continue opcodes for NetCharDevControl will be spec'd as
+       "reserved" (ie, we remove them from the spec).  These opcodes of the
+       api will return an error in this release.  Only opcode 0 (close device)
+       will be supported.
+
+36. The WORLD group is being renamed to USERS.  Its definition is unchanged:
+    it contains all users who have user or admin privilege level.
+
+37. (Item deleted)
+
+38. wksta_info and server_info structs have been updated to include
+    new lanman.ini parameters for workstation and server.
+
+39. New NET START swtiches added to correspond to new lanman.ini parameters:
+
+    Net Start Workstation /wrkheuristics:string /logonserver:name
+    Net Start Server /srvheuristics:string
+
+40. Net Comm /D(elete):  switch renamed to /P(urge)
+
+41. NetProfileLoad error return convention is changed.  A code of 0 is
+    returned even if an error occurs during profile loading.  To determine
+    if the load fully succeeded or not, the completion code return argument
+    must be checked. If 0, the whole profile loaded ok.  If nonzero, profile
+    loading failed in the middle, as described by the other return args.
+
+42. NetServiceControl.  The return buffer contents are no longer valid
+    for nonzero error codes on NetServiceControl.  If the service status
+    must be determined after such an error, do a NetServiceControl operation
+    with opcode == Interrogate.
+
+43. Changed NetShareAdd api so that for sharetype=spooled print, the
+    local path argument will now be the queue name being shared, rather
+    than the list of spooled devices.  Ie, the api will now only share a
+    *pre-existing* print queue.  In implementing share commands, NIF and
+    netcmd must themselves use the print queue api's to create the
+    required queue if necessary, prior to doing the NetShareAdd.
+
+44. Changed the Net Send Users option to Net Send /U(sers) as the
+    way to send a message to all logged on users.
+
+45. Added a new force level (ucond) to the NetUseDel and NetWkstaSetUID api's.
+    A ucond value of 2 will mean to proceed with the operation even if
+    it is necessary to invalidate open files and other pending activities.
+
+46. Net View and View Network Servers Zoom will not display ANY share
+    whose netname ends in a dollar sign.  Thus, special case checks for
+    ADMIN$ and IPC$ are changed to a single check for trailing $.  This
+    convention should also be published.
+
+47. Combined users.net, groups.net, and access.net into NET.ACC.
+    Provided new commands makeacc and growacc to make a default
+    accounts.net file with a given user capacity and to grow an existing
+    one to a new capacity.
+
+48. Renamed several lanman files:
+
+    AUDIT.NET  =>  NET.AUD
+    ERROR.LOG  =>  NET.ERR
+    NET001.MSG =>  NET.MSG
+
+49. Added DWORD flags parms to NetProfile Load and Save api's.  On the
+    Save api, it has bits for individual control of what info to save:
+    uses, shares, print settings, and comm settings; plus it has bits
+    to control the DosOpen action to take when opening the profile.
+    The flags parm on the Load api is reserved and MBZ.
+
+50. Added two MBZ DWORDs to the NetAuditWrite and NetErrorLogWrite
+    api's, and an MBZ DWORD to the other Audit and ErrorLog apis.
+    Also added an ae_data_offset word to the end of the fixed part
+    of the audit trail record header.  This is analogous to the el_data_offset
+    word in the error log header.  It gives the offset of the first
+    byte of type-specific audit trail data in the record (measured
+    from the actual start of the record).
+
+51. Changed redirector to load into high memory.  This greatly reduces
+    the impact to the real mode box (now about 13.5 K).
+
+52. Added two new named pipe calls, DosSetNmPipeSem and DosQNmPipeSemState.
+    This provide for efficient processing of large numbers of pipes by
+    serving applications, without requiring a thread per pipe.  Also
+    added a new info level (level 2) to DosQNmPipeInfo.  This returns
+    a unique ID for the pipe.  In the future, a Net api will be added
+    that, given the unique ID, will return the username of the user connected
+    to the pipe with that ID.
+
+53. Change to rules for print destinations for spooler:  a print destination
+    must be local to the server or a redirected device where the type
+    of redirection is "comm device".  Ie, you cannot route a print queue
+    to a redirected printer that is spooled at the other end.  Note that
+    once a device is assigned to the spooler, it can be redirected after
+    the fact, but this will not affect the spooler since the spooler
+    opens the device when it is first assigned to the print queue, and the
+    open file handle is not affected if the device is later redirected.
+
+54. Commands for pausing and continuing print queues have been changed.
+    Net Pause Print=Netname and Net Continue Print=Netname have been
+    DELETED as valid command forms.  Replacing them are
+
+    Net Print Queuename /Hold      (used to be Net Pause Print=Netname)
+    Net Print Queuename /Release   (used to be Net Continue Print=Netname)
+
+    In queue listings (and queue zoom level of detail), the status of
+    a held queue will read as "Queue Held" instead of "Paused".
+
+    NIF will have Hold and Release buttons only on the View Print Queues
+    display, and these buttons will work on both print queues and jobs.
+    The Status Devices screen will continue to have Pause and Continue buttons
+    only.
+
+    This makes holding and releasing print queues and jobs consistent.
+    The only remaining forms of Net Pause/Continue are:
+
+    Net Pause/Continue Print=LptN  (pause/continue printing on a printer)
+    Net Pause/Continue Print       (pause/continue all printing)
+
+    Pausing or continuing a printer (or all printers) affects the
+    status of the *device(s)*, not of the *queues*.
+
+55. Due to the change in item 54, the NetProfileSave API will now
+    save the hold/release status of a queue by putting the appropriate
+    /Hold switch on the saved Net Print command line if the queue status
+    indicates the queue is paused.
+
+56. Added /Active:yes|no switch to Net User, for enabling/disabling
+    a user account.  This parameter will be displayed on the Net User <name>
+    listing.
+
+57. In preparation for PM spooler support, all spooler api's
+    (DosPrintXXX) are being moved out of NETAPI.DLL, into NETSPOOL.DLL.
+
+58. In preparation for moving named pipes code into the kernel, the
+    IPCCALLS.DLL library is being split into NAMEPIPES.DLL and MAILSLOT.DLL.
+
+59. The following command line switches have been have been changed to
+    talke Yes/No arguments instead of On/Off:
+
+    Net Config Server /Srvhidden:[yes|no]
+    Net Access ResourceName /Trail:[yes|no]
+
+60. At startup, the server automatically adds a share for the root
+    of each physical disk drive.  This share is admin-protected
+    (has the P bit set in the permission mask of the share).  The
+    naming convention for the shares is A$ for A:, B$ for B:, etc.
+    These shares are used for remote admin.
+
+61. The Net View Servername command will NOT list any share from a server
+    where the name of the share ends in $.  This is a generalization of
+    the previous behavior of the command, which suppressed display of
+    IPC$ and ADMIN$ shares.  The new rule also lets the command
+    suppress the D$ drive shares (see item 60).
+
+62. The return values of all Net api functions are being changed from
+    int to unsigned short.
+
+63. In the ring 0 netbios api, the CmdInfo variable in the OEM extension table
+    has been expanded from a byte to a word, and bits defined to indicate
+    if the extended ncb has lsn and/or name num fields.
+
+           Cmd             BYTE      Extended NCB Command Opcode Value
+           CmdInfo         WORD      Command descriptor bits
+                                     bit 0 == 1: standard buffer used
+                                         1 == 1: second buffer used
+                                         2 == 1: lock buffers
+                                         3 == 1: async option allowed
+                                         4 == 1: command is cancellable
+                                       6/7 == 1: if regular command
+                                              2: if privileged command
+                                              3: if exclusive command
+                                         8 == 1: Uses LSN field
+                                         9 == 1: Uses NamNum field
+                                        10 == 1: Uses Local Name Field
+                                                 (ncb_name)
+
+64. It is now possible to pause a print destination, even though there
+    is no currently printing job.  When querying the status of a print
+    job via NetPrintDestGetInfo in this case, the jobid will be 0
+    and the status will indicate a status of "paused" (bits 0-1 == 1).
+    The "destination paused" bit (bit 6) of this mask will also be set.
+
+65. The /priv:none option on Net User has been removed.  Values of
+    /priv must be one of User, Admin, or Guest.
+
+66. A reserved unsigned short arg (mbz) has been added to NetShareDel.
+
+67. Popup.exe has been renamed to netpopup.exe.
+
+68. An ini parameter has been added for the alerter.  This specifies
+    the max amount of alert data that can be queued to the alerter
+    at any time (it is in fact the size of the mailslot the alerter
+    uses to receive alert data).
+
+    [alerter]
+    sizalertbuf = 3072
+
+69. Added a new api, NetUserValidate, meant to support server-based
+    applications that need to validate a user's name/password.
+
+    unsigned far pascal
+    NetUserValidate( reserved, username, password, priv )
+
+    char far *reserved;             Must be NULL
+    char far *  username;           asciz user name
+    char far *  password;           asciz user password
+    int far *  priv;                the user's privilege level
+
+    If the username/password is valid, the user's privilege level
+    will be returned in priv.
+
+70. The following in parameters have been removed from [workstation]:
+    wrkhidden, wrkannounce, wrkanndelta, wrkcomment.  Announce, hidden,
+    and comment functions remain for [server] (this functions had not
+    in fact been implemented for workstations, and won't be in this
+    release, which is why the ini parameters are being removed).  Note
+    that the corresponding Net Start Workstation and Net Config Workstation
+    switches are also removed.
+
+71. Due to the change in item 54, print queues that are descheduled will
+    have a printed status of "Held until hh:mm" instead of "Paused until
+    hh:mm".
+
+72. The Net Statistics command is changed as follows for consistency
+    with other Net commands:
+
+    Net Statistics with no arguments displays the names of services for
+    which statistics are available.  Currently, this will be WORKSTATION
+    and SERVER.  Net Statistics <Servicename> will display the stats
+    for the specified service.
+
+73. The Net Move command isn't "identical" to Net Copy as the product
+    spec claimed.  The source path to Net Move must be a filespec.
+    The dest path must be a filespec or a directory pathname.
+
+74. The command form Net Comm \\servername\netname /D is allowed.
+
+75. Contrary what the api spec has claimed for some time, dates/times
+    returned by api's are NOT gmt.  They are returned in local time
+    relative to the caller of the api.  Although not done in this release,
+    future releases will automatically convert server time to local
+    (requester) time when api calls are made across timezone boundaries.
+
+76. For Type 6 audit records, a new code value is defined:
+
+    2 - Admin rights required.
+
+    This indicates that a Net Use to a shared resource was denied because
+    the user did not have the required admin privilege.
+
+77. The following additional switches are supported on the Net Users command:
+
+    /Enablescript:[yes|no]     ;enable/disable logon script processing for user
+    /Scriptpath:[yes|no]       ;specify pathname of logon script for user
+
+    These switches correspond to the fullscreen dialog fields specified
+    in item 13d.  Their values can be displayed by the command line
+    (along with all other user settings) by doing Net User <name>.
+
+78. A new keyword parameter, EJECT=, is supported in the parameter string
+    for print queues.  This keyword is encoded in the parms variable
+    of the PRINTQ data structure.  This keyword can have one of three
+    values, with meanings as follows:
+
+    EJECT=YES           Always issue formfeed at end of job
+    EJECT=NO            Don't issue formfeed at end of job
+    EJECT=AUTO          Issue formfeed depending on print data
+
+    The default value is AUTO if EJECT= is not specified.
+
+    The heuristic for AUTO eject is to issue a formfeed only if there
+    is no formfeed within the last 64 bytes of the print stream, or if
+    the last such formfeed is followed by any character(s) greater than
+    0x20.  Formfeeds that are one or two characters after an ESC character
+    are ignored for the sake of these checks.
+
+    Note that the processing of the EJECT= option is the responsibility
+    of the print queue processor program.  The LAN Manager default
+    printing logic behaves as described above when no queue processor
+    is specified for a given print queue.  If a queue processor is
+    specified, however, the processor must recognize and handle this
+    argument.  (See item 82 below).
+
+    Note that the user can control this parameter by specifying
+    Net Print <queuename> /parms:eject=<value> or by typing
+    the eject=<value> information into the Queue Parameters field
+    of the full screen Queue Zoom dialog.
+
+79. For product installation, the DeviceDriver= keyword for .NIF files
+    now supports a multiple command line format as follows:
+
+    DeviceDriver = <file name 1> <args>
+                 = <file name 2> <args>
+                 = <file name 3> <args>
+                 etc.
+
+    The text for each line will be moved to CONFIG.SYS as follows:
+
+    DEVICE=<driver pathname 1> <args>
+    DEVICE=<driver pathname 2> <args>
+    DEVICE=<driver pathname 3> <args>
+    etc.
+
+    Note that the drivername must be a simple filename.ext.  This file
+    must be located in the DRIVERS subdirectory.  The NETSETUP utility
+    automatically inserts a complete pathname for the driver into
+    CONFIG.SYS.
+
+80. A new .NIF keyword, SETUP=, is supported to allow OEM-supplied setup
+    intelligence.  This keyword specifies the file name of an .EXE file
+    in the DRIVERS directory that will perform OEM-specific driver
+    installation.  This program will be invoked after the NETSETUP utility
+    has made all other required modifications to CONFIG.SYS and STARTUP.CMD.
+    The invoked setup program may make further modifications to these
+    files, subject to restrictions specified below.  The program may also
+    perform other steps of copying and configuring driver-related files.
+
+    The format of the SETUP= keyword is
+
+    SETUP = <.EXE file name> <args>       for example
+    SETUP = OEMSETUP.EXE ARG1 ARG2
+
+    The setup program is invoked with its specified arguments on the command
+    line, plus four others as the last four arguments on the command line:
+
+    Absolute pathname of lanman root dir (eg, C:\LANMAN)
+    Absolute pathname of config.sys (eg, C:\CONFIG.SYS)
+    Absolute pathname of startup.cmd (eg, C:\STARTUP.CMD)
+    Quoted search string for CONFIG.SYS/STARTUP.CMD (eg, "REM ** LM NET1")
+
+    Example command line arguments of invoked setup program:
+
+    ARG1 ARG2 C:\LANMAN C:\CONFIG.SYS C:\STARTUP.CMD "REM ** LM NET1"
+
+    The invoked program must follow very specific conventions on updating
+    CONFIG.SYS and STARTUP.CMD.  Each of these files will have a pair of
+    "bracket lines" that indicate where network driver-related commands
+    should be inserted.  The last command line argument to the setup program
+    (the "search string") provides the prefix string that can be used to
+    recognize the two brackets.  This prefix string will be found starting
+    in column one of a pair of command lines in STARTUP.CMD and CONFIG.SYS.
+
+    The correct algorithm for updating STARTUP.CMD and CONFIG.SYS is to:
+
+    a. Scan command lines for the first one that starts with the
+       prefix string.  This is the starting bracket.
+
+    b. Skip over intervening lines to find the second line starting
+       with the prefix.  This is the closing bracket.
+
+    c. Insert additional command lines immediately preceding the
+       closing bracket.
+
+    If these conventions are not obeyed, the change config and uninstall
+    functions of the NETSETUP program will not be able to correctly
+    maintain the contents of CONFIG.SYS and STARTUP.CMD.  Note also that
+    for uninstall to work correctly, all OEM driver-related installation
+    materials should be located in the LANMAN tree, preferably in the
+    DRIVERS directory or a subdirectory within it.
+
+81. The product spec had an error in an example it gave for Net Run.
+    When starting the run service on a server, the correct command is
+    to do Net Start Netrun /runpath:pathname;pathname;...
+    The spec mistakenly indicated that the run path is specified by
+    first setting the OS/2 exec path via the PATH command and then
+    starting the run service.
+
+82. The following is additional information on writing print queue processors.
+    A print queue processor is an .EXE program that is invoked by the
+    spooler to print a print job.  The program is normally installed
+    in the root of the configured spool directory.  Queue processors
+    are configured on a per-queue basis, via the "processor" variable
+    in the PRINTQ structure.  This variable can be set via the
+    DosPrintQAdd and DosPrintQSetInfo calls.  If no processor is set,
+    default printing logic is used.  Print queue processors are invoked
+    with command-line arguments as follows.
+
+    The first arguments on the command line are taken from the "processor"
+    variable.  In other words, this variable can specify both the processor
+    pathname and a set of command-line arguments (eg, MYPROC.EXE ARG1 ARG2).
+    Note that processor arguments should be of KEYWORD=VALUE form.
+
+    Following the arguments taken from the "processor" variable, the following
+    additional arguments are appended to the command line:
+
+    INPUT=<pathname>        full pathname of input spool file
+    OUTPUT=<pathname>       full pathname of output print destination
+    PARMS="<job parms>"     job-specific parameters (taken from the
+                            "parms" variable in the PRINTJOB structure
+                            structures)
+    JOB=nnnn                where nnnn is the hex ascii job id (eg, 0013)
+    QUEUE=<queuename>       name of print queue the job is printing from
+
+    Note 1:  If the print destination (OUTPUT=) is an OS/2 COM or LPT device,
+    the spooler opens this device and passes it to the print processor
+    as stdout.  In this case, the print processor should not attempt
+    to open the device, but should simply write to stdout.
+
+    Note 2:  A print queue processor is free to use any LAN Manager api,
+    including print api's.  For example, it may want to use the job id
+    and queue name information to get job- and queue-related information
+    (for example, if the print queue processor supports the EJECT= option,
+    it should use DosPrintQGetInfo to fetch the queue-related parms variable
+    where this option is specified).
+
+    Note 3:  Print processors are responsible for establishing a signal
+    handler to field print job control requests that result from
+    calls to DosPrintDestControl.  The processor must also use
+    DosPrintDestStatus to acknowledge these control operations,
+    or to indicate spontaneous changes in print job status (like
+    printer problems) which require human intervention.  Control
+    signals are received via Flag A with the Flagarg indicating
+    the control operation.  The value of the Flagarg corresponds
+    to the opcode in DosPrintDestControl for pausing, continuing,
+    restarting, and killing a print job.  See the documentation for
+    the DosPrint api's for more information.  The following is
+    partial pseudocode for the signal handling logic:
+
+        /* template */
+        void pascal far
+        SignalHandler(opcode,flag)
+        WORD flag;      /* should be value 5 -- flag A */
+        WORD opcode;    /* opcode */
+        {
+                switch(opcode) {
+                case SPOOLRESTART:
+                        ...
+                case SPOOLKILL:
+                        ...
+                case SPOOLPAUSE:
+                        ...
+                case SPOOLCONT:
+                        ...
+                }
+
+                /* handshake */
+                DosPrintDestStatus(destination,
+                        0,      /* don't change pid */
+                        0,      /* success */
+                        NOCARE);/* no new status string */
+
+                /* Re-Enable signal handling */
+                DosSetSigHandler(SignalHander,
+                        &prevaddr,      /* previous addr */
+                        &prevact,       /* previous action */
+                        4,              /* Re-Enable */
+                        5 };            /* flag A */
+        }
+
+83.  Here is the description of the srvheuristics parameter in
+     lanman.ini.
+
+
+     The server heuristics are a 13 character string in which each
+     character is a flag for a particular heuristic.  If the string is
+     shorter than the 13 characters, the defaults apply for those flags
+     not included.
+
+     The srvheuritics characters apply to flags as follows:
+
+     0 Opportunistic locking
+
+       This tells the server that it is the only application running on
+       the server so it has full knowledge of whether a file is being
+       used or not.  The allows buffering of files with deny none
+       rights, if a client requests opportunistic locking.
+
+       Valid values are:
+
+       "0" means do not use opporunistic locking.  "1" means use
+       opportunistic locking.
+
+       Default:  "1"
+
+     1 Read Ahead
+
+       This tells the server to use read ahead logic when the server
+       detects a client using sequential access.
+
+       Valid values are:
+
+       "0" means do not use read ahead logic.  "1" means use single
+       thread read ahead logic.  "2" use an asynchronos read ahead
+       thread.
+
+       Default:  "1"
+
+     2 Write Behind
+
+       Whether the server will respond to a client that a write has been
+       completed before the write has been sent to OS/2 for processing.
+       This has the disadvantage of an error on the current write being
+       reported on a subsequent write.  Note that files that have been
+       opened requesting write thru will never use write behind.
+
+       Valid values are:
+
+       "0" means do not use write behind.  "1" means use write behind.
+
+       Default:  "1"
+
+     3 Chain Send
+
+       This controls whether the server will use chain sends or not.
+
+       Valid values are:
+
+       "0" Do not use chain send.  "1" Use chain send.
+
+       Default:  "1"
+
+     4 Safe
+
+       Controls whether server will validate all incomming SMBs for
+       correct format or not.  This would be used in a mixed redirector
+       environment.
+
+       Valid values are:
+
+       "0" Do not use safety checking.  "1" Use safety checking.
+
+       Default:  "0"
+
+     5 FCB access
+
+       Controls whether server will support FCB opens or not.  If this
+       is turned on all FCB opens for a single file are collapsed to a
+       single open.  If no DOS 3.x stations are on the network, this is
+       unnecessary.
+
+       Valid values are:
+
+       "0" Do not use FCB access.  "1" Use FCB access.
+
+       Default:  "1"
+
+     6 Priority
+
+       This specifies at what priority the server will run.
+
+       Valid values are:
+
+
+                        Priority Class       Priority Delta
+                        ==============       ==============
+       "0"                     3                    31
+       "1"                     3                    23
+       "2"                     3                    15
+       "3"                     3                     7
+       "4"                     3                     0
+       "5"                     2                    31
+       "6"                     2                    23
+       "7"                     2                    15
+       "8"                     2                     7
+       "9"                     2                     0
+
+       Default: "0"
+
+     7 Search
+
+       If this is turned on, when the server runs out of searches it
+       will allocate more memory for more searches up to a maximum of
+       2048.  This must be used for correct operation, if DOS 3.x
+       stations are on the network.
+
+       Valid values are:
+
+       "0" Do not expand number of searches.  "1" Expand number of
+       searches up to 2048.
+
+       Default:  "1"
+
+     8 Lazy Audit
+
+       If this is turned on, audit records will only be written when the
+       scavenger wakes up to read them.  When turned off, an audit
+       record is requested the scavenger is awoken to write the audit
+       record.
+
+       Valid values are:
+
+       "0" Write audit records immediately.  "1" Write audit records
+       next time scavenger wakes up.
+
+       Default:  "1"
+
+     9 Deny Write Buffering
+
+       This controls the level of bufferring which is done when a file
+       is written with deny write requested.  If this flag is turned on
+       the full bufferring as requested by the Read Ahead and Write
+       Behind heuristics will be done.  If the buffering is turned off,
+       no bufferring will be done for files opened with deny write.
+
+       Valid values are:
+
+       "0" Do not buffer when using deny write.  "1" Use deny write
+       buffering.
+
+       Default:  "1"
+
+     10 Scavenger Wake Up
+
+       This controls the interval at which the scavenger is woken up.
+
+       Valid values are "0" through "9" with "0" meaning wake up every 5
+       seconds.  With each number about adding 5 seconds to the wake up
+       interval so that "9" means wake the scavenger up every 50
+       seconds.
+
+       Default:  "1"
+
+    11 Soft Compatibility Mode
+
+       This controls how strictly the server will enforce compatibility
+       opens for read only.  In the strictest sense of compatibility
+       opening, if there is any open of a file with a sharing mode set,
+       then a compatibility mode open of that file will fail.  When this
+       is turned on, a compatibility mode open for read only will be
+       translated in to a sharing mode open with deny write turned on.
+       This is especially useful in sharing executeables.
+
+       Valid values are:
+
+       "0" Do not use soft compatibility opens "1" Use soft
+       compatibility opens.
+
+       Default:  "1"
+
+     12 Second VC for down level clients.
+
+       This controls whether the DOS redirectors on the network use a
+       second VC when doing print requests.  If they do, this flag must
+       be set.  Otherwise, a second VC request from a down level
+       redirector aborts any previous sessions set up for that client.
+
+       Valid values are:
+
+       "0" Do not use a second VC for down level clients.  "1" Allow a
+       second VC for down level clients.
+
+       Default:  "1"
+
+84. The max allowed number of permission entries per resource has been
+    expanded from 16 to 64.
+
